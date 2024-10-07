@@ -52,6 +52,30 @@ class MainActivity : AppCompatActivity() {
     private fun listClickListener() {
         binding.scanList.setOnItemClickListener { parent, view, position, id ->
             Log.d("BLE!@!@", "Clicked -> position: $position, id: $id")
+
+            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.S){
+                if (ContextCompat.checkSelfPermission(
+                        applicationContext,
+                        Manifest.permission.BLUETOOTH_CONNECT
+                    ) == PackageManager.PERMISSION_GRANTED
+                ) {
+                    val device = leDeviceListAdapter.getDevice(position) as BluetoothDevice
+                    val intent = Intent(this, DeviceControlActivity::class.java)
+                    Log.d("BLE!@!@", "clicked_deviceName: ${device.name}")
+                    Log.d("BLE!@!@", "clicked_deviceAddress: ${device.address}")
+                    intent.putExtra(DeviceControlActivity.EXTRAS_DEVICE_NAME, device.name)
+                    intent.putExtra(DeviceControlActivity.EXTRAS_DEVICE_ADDRESS, device.address)
+                    startActivity(intent)
+                }
+            } else {
+                val device = leDeviceListAdapter.getDevice(position) as BluetoothDevice
+                val intent = Intent(this, DeviceControlActivity::class.java)
+                Log.d("BLE!@!@", "clicked_deviceName: ${device.name}")
+                Log.d("BLE!@!@", "clicked_deviceAddress: ${device.address}")
+                intent.putExtra(DeviceControlActivity.EXTRAS_DEVICE_NAME, device.name)
+                intent.putExtra(DeviceControlActivity.EXTRAS_DEVICE_ADDRESS, device.address)
+                startActivity(intent)
+            }
         }
     }
 
@@ -96,36 +120,6 @@ class MainActivity : AppCompatActivity() {
             Log.d("BLE!@!@", "Scanning...")
             //스캔 결과값 받아올 콜백 메소드
             //어뎁터에 연결하여 디바이스 정보 뿌려주는 로직(우선 리스트에 담아서 로그로 확인작업)
-
-//            //디바이스 정보가져올때 android version 12++ BLUETOOTH_CONNECT 권한 필요
-//            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {    //version 12++(BLUETOOTH_SCAN은 version 12이상 타겟팅)
-//                if (ContextCompat.checkSelfPermission(
-//                        applicationContext,
-//                        Manifest.permission.BLUETOOTH_CONNECT
-//                    ) == PackageManager.PERMISSION_GRANTED
-//                ) {
-//                    leDeviceListAdapter.addDevice(result)
-//                    leDeviceListAdapter.notifyDataSetChanged()
-//                } else {
-//                    Log.d("BLE!@!@", "BLUETOOTH_BLUETOOTH_CONNECT_V12 권한이 없습니다.")
-//                    checkPermission()
-//                }
-//            } else {    //version 12++ 이외
-////                result?.let {
-////                    if (!arrayDevices.contains(it.device)) {
-////                        arrayDevices.add(it.device)
-////                        for (device in arrayDevices){
-////                            device.name?.let { name ->
-////                                Log.d("BLE!@!@", "device_info_name: $name")
-////                            }
-////                        }
-////                    } else {
-////                        Log.d("BLE!@!@", "device_add_info: no_device")
-////                    }
-////                }
-//                leDeviceListAdapter.addDevice(result)
-//                leDeviceListAdapter.notifyDataSetChanged()
-//            }
             leDeviceListAdapter.addDevice(result)
             leDeviceListAdapter.notifyDataSetChanged()
         }
@@ -247,6 +241,10 @@ class MainActivity : AppCompatActivity() {
 
         override fun getItemId(position: Int): Long {
            return position.toLong()
+        }
+
+        fun getDevice(position: Int): Any {
+            return arrayDevices[position]
         }
 
         override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
