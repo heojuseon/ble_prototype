@@ -31,21 +31,9 @@ class BluetoothLeService: Service() {
     var bluetoothGatt: BluetoothGatt? = null
     var deviceAddress: String? = ""
 
-//    val bluetoothAdapter: BluetoothAdapter by lazy(LazyThreadSafetyMode.NONE) {
-//        val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-//        bluetoothManager.adapter
-//    }
-
-    private var bluetoothAdapter: BluetoothAdapter? = null
-    fun initialize(): Boolean {
+    private val bluetoothAdapter: BluetoothAdapter by lazy(LazyThreadSafetyMode.NONE) {
         val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         bluetoothManager.adapter
-
-        if (bluetoothAdapter == null) {
-            Log.e("BLE!@!@", "Unable to obtain a BluetoothAdapter.")
-            return false
-        }
-        return true
     }
 
     companion object{
@@ -173,7 +161,7 @@ class BluetoothLeService: Service() {
             }
         }
 
-        val device = bluetoothAdapter?.getRemoteDevice(address)
+        val device = bluetoothAdapter.getRemoteDevice(address)
         bluetoothGatt = device?.connectGatt(this, false, bluetoothGattCallback)
         deviceAddress = address
         connectionState = STATE_CONNECTING

@@ -36,14 +36,7 @@ class DeviceControlActivity : AppCompatActivity() {
 
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             bluetoothLeService = (service as BluetoothLeService.LocalBinder).getService()
-//            bluetoothLeService?.connect(deviceAddress)
-            bluetoothLeService?.let { bluetooth ->
-                if (!bluetooth.initialize()) {
-                    Log.e("BLE!@!@", "Unable to initialize Bluetooth")
-                    finish()
-                }
-                bluetooth.connect(deviceAddress)
-            }
+            bluetoothLeService?.connect(deviceAddress)
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {

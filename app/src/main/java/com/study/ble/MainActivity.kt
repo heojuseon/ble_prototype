@@ -79,6 +79,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // BLUETOOTH_CONNECT 권한 요청 콜백
+    private val requestBluetoothConnectPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            Log.d("BLE!@!@", "BLUETOOTH_CONNECT_isGranted: $isGranted")
+            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+            requestBluetooth.launch(enableBtIntent)
+        } else {
+            Log.d("BLE!@!@", "BLUETOOTH_CONNECT 권한이 거부되었습니다.")
+        }
+    }
+
     //블루투스 활성화 요청 콜백
     private var requestBluetooth = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -99,19 +112,27 @@ class MainActivity : AppCompatActivity() {
     private val requestMultiplePermissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        permissions.entries.forEach { entry ->
-            val permissionName = entry.key
-            val isGranted = entry.value
-            if (isGranted){
-                //권한 승인 시 scanning
-                Log.d("BLE!@!@", "Permission : $permissionName 권한 허용됨")
-                startScan()
+//        permissions.entries.forEach { entry ->
+//            val permissionName = entry.key
+//            val isGranted = entry.value
+//            if (isGranted){
+//                //권한 승인 시 scanning
+//                Log.d("BLE!@!@", "Permission : $permissionName 권한 허용됨")
+//                startScan()
+//
+//            } else {
+//                Log.d("BLE!@!@", "Permission : $permissionName 권한 거부됨")
+//            }
+//        }
 
-            } else {
-                Log.d("BLE!@!@", "Permission : $permissionName 권한 거부됨")
-            }
+        val allGranted = permissions.all { it.value } // 모든 권한이 승인되었는지 확인
+        if (allGranted) {
+            Log.d("BLE!@!@", "모든 권한이 허용됨")
+            startScan() // 권한이 모두 승인된 경우 스캔 시작
+        } else {
+            Log.d("BLE!@!@", "일부 권한이 거부됨")
+            finish() // 권한 거부 시 앱 종료 (임시 조치)
         }
-
     }
 
     private val leScanCallback: ScanCallback = object : ScanCallback() {
@@ -136,7 +157,7 @@ class MainActivity : AppCompatActivity() {
             if (ContextCompat.checkSelfPermission(
                     this,
                     Manifest.permission.BLUETOOTH_SCAN
-            ) == PackageManager.PERMISSION_GRANTED){
+                ) == PackageManager.PERMISSION_GRANTED){
                 Log.d("BLE!@!@", "Start_Scan_v12")
                 if (!scanning) {
                     //스캔 시간 지나면 중지
@@ -145,6 +166,7 @@ class MainActivity : AppCompatActivity() {
                         bluetoothScanner?.stopScan(leScanCallback)
                     }, SCAN_PERIOD)
                     scanning = true
+                    Log.d("BLE!@!@", "Start_Scan_v12-------->")
                     bluetoothScanner?.startScan(leScanCallback)
                 } else {
                     scanning = false
@@ -191,11 +213,25 @@ class MainActivity : AppCompatActivity() {
         }
         Log.d("BLE!@!@", "bluetoothAdapter_info : $bluetoothAdapter")
         Log.d("BLE!@!@", "bluetoothAdapter_boolean : ${bluetoothAdapter?.isEnabled}")
-        //블루투스 활성화
-        if (bluetoothAdapter?.isEnabled == false){  //활성화가 안되어있을경우
-            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
-            requestBluetooth.launch(enableBtIntent)
-        } else { //활성화가 되어있을경우
+
+        // 블루투스 활성화 상태 체크
+        if (bluetoothAdapter?.isEnabled == false) { // 활성화가 안 되어 있을 경우
+            // Android 12 이상에서는 BLUETOOTH_CONNECT 권한이 필요
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (ContextCompat.checkSelfPermission(
+                        this,
+                        Manifest.permission.BLUETOOTH_CONNECT
+                    ) != PackageManager.PERMISSION_GRANTED) {
+                    requestBluetoothConnectPermission.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                } else {
+                    val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                    requestBluetooth.launch(enableBtIntent)
+                }
+            } else {
+                val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                requestBluetooth.launch(enableBtIntent)
+            }
+        } else { // 활성화가 되어 있을 경우
             checkPermission()
         }
     }
