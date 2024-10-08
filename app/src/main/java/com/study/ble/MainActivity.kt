@@ -112,19 +112,6 @@ class MainActivity : AppCompatActivity() {
     private val requestMultiplePermissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-//        permissions.entries.forEach { entry ->
-//            val permissionName = entry.key
-//            val isGranted = entry.value
-//            if (isGranted){
-//                //권한 승인 시 scanning
-//                Log.d("BLE!@!@", "Permission : $permissionName 권한 허용됨")
-//                startScan()
-//
-//            } else {
-//                Log.d("BLE!@!@", "Permission : $permissionName 권한 거부됨")
-//            }
-//        }
-
         val allGranted = permissions.all { it.value } // 모든 권한이 승인되었는지 확인
         if (allGranted) {
             Log.d("BLE!@!@", "모든 권한이 허용됨")
