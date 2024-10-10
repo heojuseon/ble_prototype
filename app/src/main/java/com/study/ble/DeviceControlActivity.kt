@@ -1,9 +1,11 @@
 package com.study.ble
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothGattService
+import android.bluetooth.BluetoothStatusCodes
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -12,14 +14,20 @@ import android.content.IntentFilter
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.icu.lang.UCharacter.GraphemeClusterBreak.L
+import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.core.content.ContextCompat.registerReceiver
 import com.study.ble.DeviceControlActivity.Companion.EXTRAS_DEVICE_ADDRESS
 import com.study.ble.DeviceControlActivity.Companion.EXTRAS_DEVICE_NAME
+import com.study.ble.utill.Constants
 import com.study.ble.utill.SafeAppGattAttribute
+import com.study.ble.utill.SafeAppGattAttribute.TX_CHARACTERISTIC
+import com.study.ble.utill.SafeAppGattAttribute.UART_SERVICE
 import java.util.UUID
 
 class DeviceControlActivity : AppCompatActivity() {
@@ -121,10 +129,10 @@ class DeviceControlActivity : AppCompatActivity() {
                 val currentCharaData: HashMap<String, String> = hashMapOf()
                 uuid = gattCharacteristic.uuid.toString()
 
-//                //tx 특성만 뽑을경우
-//                if (uuid.equals("6E400003-B5A3-F393-E0A9-E50E24DCCA9E".lowercase())) {
-//                    txCharacteristic = gattCharacteristic
-//                }
+                //tx 특성만 뽑을경우
+                if (uuid.equals("6E400002-B5A3-F393-E0A9-E50E24DCCA9E".lowercase())) {
+                    writeCharacteristic = gattCharacteristic
+                }
 
                 Log.d("BLE!@!@", "gatt_charas_uuid: $uuid")
                 currentCharaData["name"] = SafeAppGattAttribute.lookup(uuid, "unknowncharas")
@@ -140,36 +148,13 @@ class DeviceControlActivity : AppCompatActivity() {
 //        //tx 특성만 뽑을경우
 //        Log.d("BLE!@!@", "txCharacteristic : ${txCharacteristic?.uuid}")
 
-//        gattServices.forEach { gattService ->
-//            val serviceUuid = gattService.uuid.toString()
-//            Log.d("BLE!@!@", "Service discovered: $serviceUuid")
-//
-//            // 각 서비스에 대해 characteristic들을 가져옴
-//            val gattCharacteristics = gattService.characteristics
-//            gattCharacteristics.forEach { characteristic ->
-//                val characteristicUuid = characteristic.uuid.toString()
-//                Log.d("BLE!@!@", "Characteristic discovered: $characteristicUuid")
-//
-//                when (characteristic.uuid) {
-//                    Constants.TX_CHARACTERISTIC -> {
-//                        // TX 특성 (데이터 전송 처리)
-//                        writeCharacteristic = characteristic
-//                        Log.d("BLE!@!@", "TX Characteristic found")
-//                    }
-//                    Constants.RX_CHARACTERISTIC -> {
-//                        // RX 특성 (데이터(알림) 수신 처리)
-//                        notifyCharacteristic = characteristic
-//                        enableNotifications(characteristic)
-//                        Log.d("BLE!@!@", "RX Characteristic found")
-//                    }
-//                }
-//            }
-//        }
+        sayHello()
     }
-    private fun sendData(data: String) {
+
+    private fun sayHello() {
         writeCharacteristic?.let {
-            if (it.properties or BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE > 0){
-                bluetoothLeService?.writeCharacteristic(it, data)
+            if (it.properties or BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE > 0) {
+                bluetoothLeService?.writeCharacteristic(it)
             }
         }
     }

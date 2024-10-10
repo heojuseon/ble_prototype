@@ -18,28 +18,21 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Binder
 import android.os.Build
+import android.os.Build.VERSION_CODES.S
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.study.ble.utill.SafeAppGattAttribute
 import com.study.ble.utill.SafeAppGattAttribute.RX_CHARACTERISTIC
+import com.study.ble.utill.SafeAppGattAttribute.TX_CHARACTERISTIC
 import java.lang.IllegalArgumentException
 import java.util.UUID
 
 class BluetoothLeService: Service() {
-//    val STATE_DISCONNECTED = 0
-//    val STATE_CONNECTING = 1
-//    val STATE_CONNECTED = 2
 
     private var connectionState = STATE_DISCONNECTED
-    private var bluetoothGatt: BluetoothGatt? = null
-    var deviceAddress: String? = ""
-
-//    private val bluetoothAdapter: BluetoothAdapter by lazy(LazyThreadSafetyMode.NONE) {
-//        val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-//        bluetoothManager.adapter
-//    }
+    var bluetoothGatt: BluetoothGatt? = null
 
     private var bluetoothAdapter: BluetoothAdapter? = null
     fun initialize(): Boolean {
@@ -116,11 +109,6 @@ class BluetoothLeService: Service() {
             } else {
                 Log.d("BLE!@!@", "onServicesDiscovered_GATT_FAIL: $status")
             }
-//            when(status) {
-//                BluetoothGatt.GATT_SUCCESS -> {
-//                    broadcastUpdate(ACTION_GATT_SERVICES_DISCOVERED)
-//                }
-//            }
         }
 
         // 특성의 결과를 읽어온다.
@@ -149,6 +137,15 @@ class BluetoothLeService: Service() {
             super.onCharacteristicChanged(gatt, characteristic, value)
             broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic)
         }
+
+        override fun onCharacteristicWrite(
+            gatt: BluetoothGatt?,
+            characteristic: BluetoothGattCharacteristic?,
+            status: Int
+        ) {
+            super.onCharacteristicWrite(gatt, characteristic, status)
+            Log.d("BLE!@!@", "onCharacteristicWrite")
+        }
     }
 
     private fun broadcastUpdate(action: String, characteristic: BluetoothGattCharacteristic) {
@@ -174,17 +171,6 @@ class BluetoothLeService: Service() {
                 }
             }
         }
-
-//        characteristic.let {
-//            when (characteristic.uuid) {
-//                Constants.RX_CHARACTERISTIC -> {
-//                    val data: String = getString(0)
-//                    intent.putExtra(EXTRA_DATA, data)
-//                }
-//                else -> Log.d("BLE!@!@", "broadcastUpdate: ")
-//            }
-//        }
-//        sendBroadcast(intent)
     }
 
     /**
@@ -239,44 +225,6 @@ class BluetoothLeService: Service() {
             Log.d("BLE!@!@", "BluetoothAdapter not initialized")
             return false
         }
-
-//        bluetoothGatt?.let {
-//            if (address.equals(deviceAddress)) {
-//                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-//                    if (ContextCompat.checkSelfPermission(
-//                            this,
-//                            Manifest.permission.BLUETOOTH_CONNECT
-//                        ) == PackageManager.PERMISSION_GRANTED
-//                    ) {
-//                        return if (it.connect()){
-//                            connectionState = STATE_CONNECTING
-//                            Log.d("BLE!@!@", "bluetoothGatt_connect: $connectionState")
-//                            true
-//                        } else{
-//                            Log.d("BLE!@!@", "bluetoothGatt_connect: $connectionState")
-//                            false
-//                        }
-//                    }
-//                } else {
-//                    //12 이하
-//                    return if (it.connect()){
-//                        connectionState = STATE_CONNECTING
-//                        Log.d("BLE!@!@", "bluetoothGatt_connect: $connectionState")
-//                        true
-//                    } else {
-//                        Log.d("BLE!@!@", "bluetoothGatt_connect: $connectionState")
-//                        false
-//                    }
-//                }
-//            }
-//        }
-//
-//        val device = bluetoothAdapter.getRemoteDevice(address)
-//        bluetoothGatt = device?.connectGatt(this, false, bluetoothGattCallback)
-//        deviceAddress = address
-//        connectionState = STATE_CONNECTING
-//        Log.d("BLE!@!@", "bluetoothGatt_connect2: $connectionState")
-//        return true
     }
 
 
@@ -286,11 +234,6 @@ class BluetoothLeService: Service() {
      */
     fun getSupportedGattServices(): List<BluetoothGattService?>? {
         return bluetoothGatt?.services
-//        return if (bluetoothGatt == null) {
-//            emptyList()
-//        } else {
-//            bluetoothGatt!!.services
-//        }
     }
 
 
@@ -319,31 +262,51 @@ class BluetoothLeService: Service() {
         }
     }
 
-    @SuppressLint("MissingPermission")
-    fun writeCharacteristic(txCharacteristic: BluetoothGattCharacteristic, data: String) {
-        txCharacteristic.let { characteristic ->
-            val len: Byte = 0x01  // 데이터 길이
-            val cmd: Byte = 0xA1.toByte()  // 전송할 CMD 값
+    fun writeCharacteristic(it: BluetoothGattCharacteristic) {
+        val len: Byte = 0x01  // 데이터 길이
+        val cmd: Byte = 0xA1.toByte()  // 전송할 CMD 값
+        val byteArrayValue = byteArrayOf(len, cmd)
 
-            // 보낼 데이터를 ByteArray로 생성 (len + cmd)
-            val byteArrayValue = byteArrayOf(len, cmd)
-            // 데이터를 설정하는 방식 변경
-            val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                bluetoothGatt?.writeCharacteristic(
-                    characteristic,
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                ) == PackageManager.PERMISSION_GRANTED) {
+                val result = bluetoothGatt?.writeCharacteristic(
+                    it,
                     byteArrayValue,
                     BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
                 )
-            } else {
-                bluetoothGatt?.writeCharacteristic(txCharacteristic)
+                if (result == BluetoothStatusCodes.SUCCESS) {
+                    // 성공적으로 데이터 전송됨
+                    Log.d("BLE!@!@", "Data written successfully")
+                } else {
+                    // 데이터 전송 실패
+                    Log.e("BLE!@!@", "Failed to write data: $result")
+                }
             }
+        } else {
+            it.value = byteArrayValue
+            it.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+            val result = bluetoothGatt?.writeCharacteristic(it)
 
-            if (result == BluetoothStatusCodes.SUCCESS){
-                // 성공적으로 데이터 전송됨
-                Log.d("BLE!@!@", "Data written successfully")
-            }
-            else {
-                Log.d("BLE!@!@", "Failed to write data")
+            if (result == true) {
+                Log.d("BLE!@!@", "Command sent successfully: len = $len, cmd = $cmd")
+
+                Thread.sleep(2000)
+
+                //test -> Led on
+                val ledLen: Byte = 0x02  // 데이터 길이
+                val ledCmd: Byte = 0xA8.toByte()  // 전송할 CMD 값
+                val ledData: Byte = 0x02
+                val ledByteArrayValue = byteArrayOf(ledLen, ledCmd, ledData)
+
+                it.value = ledByteArrayValue
+                it.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+                bluetoothGatt?.writeCharacteristic(it)
+
+            } else {
+                Log.d("BLE!@!@", "Failed to send command: $result")
             }
         }
     }

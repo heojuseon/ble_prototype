@@ -1,5 +1,11 @@
-//package com.study.ble.utill
-//
+package com.study.ble.utill
+
+import android.bluetooth.BluetoothGatt
+import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattService
+import com.study.ble.utill.SafeAppGattAttribute.SERVICE_STRING
+import java.util.UUID
+
 //import java.util.UUID
 //
 //class Constants {
@@ -14,3 +20,61 @@
 //        val CLIENT_CHARACTERISTIC_CONFIG: UUID? = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 //    }
 //}
+
+class Constants {
+  companion object {
+
+      fun findCommandCharacteristic(gatt: BluetoothGatt): BluetoothGattCharacteristic? {
+          return findCharacteristic(gatt, SafeAppGattAttribute.WRITE_CHARACTERISTI)
+      }
+
+      private fun findCharacteristic(
+          gatt: BluetoothGatt,
+          uuidString: String
+      ): BluetoothGattCharacteristic? {
+          val serviceList = gatt.services
+          val service = findGattService(serviceList) ?: return null
+          val characteristicList = service.characteristics
+          for (characteristic in characteristicList) {
+              if (matchCharacteristic(characteristic, uuidString)) {
+                  return characteristic
+              }
+          }
+          return null
+      }
+
+      private fun matchCharacteristic(
+          characteristic: BluetoothGattCharacteristic?,
+          uuidString: String
+      ): Boolean {
+          if (characteristic == null) {
+              return false
+          }
+          val uuid: UUID = characteristic.uuid
+          return matchUUIDs(uuid.toString(), uuidString)
+      }
+
+      private fun findGattService(serviceList: List<BluetoothGattService>): BluetoothGattService? {
+          for (service in serviceList) {
+              val serviceUuidString = service.uuid.toString()
+              if (matchServiceUUIDString(serviceUuidString)) {
+                  return service
+              }
+          }
+          return null
+      }
+
+      private fun matchServiceUUIDString(serviceUuidString: String): Boolean {
+          return matchUUIDs(serviceUuidString, SERVICE_STRING)
+      }
+
+      private fun matchUUIDs(uuidString: String, vararg matches: String): Boolean {
+          for (match in matches) {
+              if (uuidString.equals(match, ignoreCase = true)) {
+                  return true
+              }
+          }
+          return false
+      }
+  }
+}
