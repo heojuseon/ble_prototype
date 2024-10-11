@@ -13,13 +13,17 @@ import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothStatusCodes
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanResult
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Binder
 import android.os.Build
 import android.os.Build.VERSION_CODES.S
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -35,6 +39,13 @@ class BluetoothLeService: Service() {
     var bluetoothGatt: BluetoothGatt? = null
 
     private var bluetoothAdapter: BluetoothAdapter? = null
+    private var bluetoothScanner = bluetoothAdapter?.bluetoothLeScanner
+
+    private var scanning = false
+    private val handler = Handler(Looper.getMainLooper())
+    // Stops scanning after 10 seconds.
+    private val SCAN_PERIOD: Long = 10000
+
     fun initialize(): Boolean {
         val bluetoothManager: BluetoothManager = getSystemService(BluetoothManager::class.java)
         bluetoothAdapter = bluetoothManager.adapter
@@ -42,6 +53,7 @@ class BluetoothLeService: Service() {
             Log.e("BLE!@!@", "Unable to obtain a BluetoothAdapter.")
             return false
         }
+        bluetoothScanner = bluetoothAdapter?.bluetoothLeScanner
         return true
     }
 
@@ -55,6 +67,51 @@ class BluetoothLeService: Service() {
         const val STATE_DISCONNECTED = 0
         const val STATE_CONNECTING = 1
         const val STATE_CONNECTED = 2
+
+        const val BLE_SCAN_RESULT = "BLE_SCAN_RESULT"
+    }
+
+    private val leScanCallback: ScanCallback = object : ScanCallback(){
+        override fun onScanResult(callbackType: Int, result: ScanResult?) {
+            super.onScanResult(callbackType, result)
+//            // 스캔이 중단된 상태라면 추가적인 스캔 결과는 무시
+//            if (!scanning) return
+            Log.d("BLE!@!@", "Scanning...")
+            //스캔 결과값 받아올 콜백 메소드
+            //어뎁터에 연결하여 디바이스 정보 뿌려주는 로직(우선 리스트에 담아서 로그로 확인작업)
+            //result 를 브로드캐스트로 액티비티 전달
+            val device = result?.device
+            val deviceName = device?.name
+            val deviceAddress = device?.address
+            if (Build.VERSION.SDK_INT >= S) {
+                if (ContextCompat.checkSelfPermission(
+                        this@BluetoothLeService,
+                        Manifest.permission.BLUETOOTH_CONNECT
+                    ) == PackageManager.PERMISSION_GRANTED
+                ) {
+                    if (deviceName?.startsWith("GBS") == true) {
+                        scanning = false
+                        bluetoothScanner?.stopScan(this)
+                        handler.removeCallbacksAndMessages(null)
+                        Log.d("BLE!@!@", "Scan stopped")
+                    }
+                    val intent = Intent(BLE_SCAN_RESULT) //action 값
+                    intent.putExtra("device_name", deviceName)
+                    intent.putExtra("device_address", deviceAddress)
+                    sendBroadcast(intent)
+                } else return
+            } else {
+                val intent = Intent(BLE_SCAN_RESULT) //action 값
+                intent.putExtra("device_name", deviceName)
+                intent.putExtra("device_address", deviceAddress)
+                sendBroadcast(intent)
+            }
+        }
+
+        override fun onScanFailed(errorCode: Int) {
+            super.onScanFailed(errorCode)
+            Log.d("BLE!@!@", "Scan_failed")
+        }
     }
 
 
@@ -75,7 +132,7 @@ class BluetoothLeService: Service() {
                     connectionState = STATE_CONNECTED
                     Log.d("BLE!@!@", "successfully connected to the GATT Server")
 
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    if (Build.VERSION.SDK_INT >= S) {
                         if (ContextCompat.checkSelfPermission(
                                 this@BluetoothLeService,
                                 Manifest.permission.BLUETOOTH_CONNECT
@@ -197,7 +254,7 @@ class BluetoothLeService: Service() {
     fun connect(address: String?): Boolean {
         bluetoothAdapter?.let { adapter ->
             try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (Build.VERSION.SDK_INT >= S) {
                     if (ContextCompat.checkSelfPermission(
                         this,
                         Manifest.permission.BLUETOOTH_CONNECT
@@ -244,7 +301,7 @@ class BluetoothLeService: Service() {
     }
     private fun close() {
         bluetoothGatt?.let { gatt ->
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (Build.VERSION.SDK_INT >= S) {
                 if (ContextCompat.checkSelfPermission(
                         this,
                         Manifest.permission.BLUETOOTH_CONNECT
@@ -307,6 +364,45 @@ class BluetoothLeService: Service() {
 
             } else {
                 Log.d("BLE!@!@", "Failed to send command: $result")
+            }
+        }
+    }
+
+    fun startScan() {
+        if (Build.VERSION.SDK_INT >= S) {
+            if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.BLUETOOTH_SCAN
+            ) == PackageManager.PERMISSION_GRANTED) {
+                if (!scanning) {
+                    handler.postDelayed({
+                        scanning = false
+                        bluetoothScanner?.stopScan(leScanCallback)
+                        Log.d("BLE!@!@", "No_Device_Scan stopped")
+                    }, SCAN_PERIOD)
+                    scanning = true
+                    Log.d("BLE!@!@", "Start_Scan_v12-------->")
+                    bluetoothScanner?.startScan(leScanCallback)
+                } else {
+                    scanning = false
+                    bluetoothScanner?.stopScan(leScanCallback)
+                    Log.d("BLE!@!@", "Scan stopped")
+                }
+            } else return
+        } else {
+            if (!scanning) {
+                handler.postDelayed({
+                    scanning = false
+                    bluetoothScanner?.stopScan(leScanCallback)
+                    Log.d("BLE!@!@", "No_Device_Scan stopped")
+                }, SCAN_PERIOD)
+                scanning = true
+                Log.d("BLE!@!@", "Start_Scan")
+                bluetoothScanner?.startScan(leScanCallback)
+            } else {
+                scanning = false
+                bluetoothScanner?.stopScan(leScanCallback)
+                Log.d("BLE!@!@", "Scan stopped")
             }
         }
     }

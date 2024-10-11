@@ -17,13 +17,16 @@ import android.icu.lang.UCharacter.GraphemeClusterBreak.L
 import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.registerReceiver
 import com.study.ble.DeviceControlActivity.Companion.EXTRAS_DEVICE_ADDRESS
 import com.study.ble.DeviceControlActivity.Companion.EXTRAS_DEVICE_NAME
+import com.study.ble.databinding.ActivityDeviceControlBinding
 import com.study.ble.utill.Constants
 import com.study.ble.utill.SafeAppGattAttribute
 import com.study.ble.utill.SafeAppGattAttribute.TX_CHARACTERISTIC
@@ -31,6 +34,7 @@ import com.study.ble.utill.SafeAppGattAttribute.UART_SERVICE
 import java.util.UUID
 
 class DeviceControlActivity : AppCompatActivity() {
+    private lateinit var binding: ActivityDeviceControlBinding
     private var bluetoothLeService: BluetoothLeService? = null
 
     private var deviceAddress: String? = ""
@@ -38,10 +42,27 @@ class DeviceControlActivity : AppCompatActivity() {
     private var writeCharacteristic: BluetoothGattCharacteristic? = null
     private var notifyCharacteristic: BluetoothGattCharacteristic? = null
 
+
+
     companion object{
         const val EXTRAS_DEVICE_NAME = "DEVICE_NAME"
         const val EXTRAS_DEVICE_ADDRESS = "DEVICE_ADDRESS"
     }
+
+    //ble_scanReceiver
+    private val bleScanReceiver = object : BroadcastReceiver(){
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when(intent?.action) {
+                BluetoothLeService.BLE_SCAN_RESULT -> {
+                    val deviceName = intent.getStringExtra("device_name")
+                    val deviceAddress = intent.getStringExtra("device_address")
+                    Log.d("BLE!@!@", "bleScanReceiver : $deviceName")
+                }
+            }
+        }
+
+    }
+
 
     //서비스가 연결되어있을 경우 안되어있을경우
     private val serviceConnection: ServiceConnection = object: ServiceConnection {
@@ -163,7 +184,11 @@ class DeviceControlActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_device_control)
+        binding = ActivityDeviceControlBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        scanControl()
+
 
         val deviceName = intent.getStringExtra(EXTRAS_DEVICE_NAME)
         deviceAddress = intent.getStringExtra(EXTRAS_DEVICE_ADDRESS)
@@ -175,12 +200,26 @@ class DeviceControlActivity : AppCompatActivity() {
         bindService(gattServiceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
     }
 
+    private fun scanControl() {
+        binding.startScan.setOnClickListener {
+            //스캔 시작
+            bluetoothLeService?.startScan()
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         registerReceiver(gattUpdateReceiver, makeGattUpdateIntentFilter())
+        registerReceiver(bleScanReceiver, bleScanIntentFilter())
         if (bluetoothLeService != null) {
             val result = bluetoothLeService!!.connect(deviceAddress)
             Log.d("BLE!@!@", "Connect request result=$result")
+        }
+    }
+
+    private fun bleScanIntentFilter(): IntentFilter {
+        return IntentFilter().apply {
+            addAction(BluetoothLeService.BLE_SCAN_RESULT)
         }
     }
 
