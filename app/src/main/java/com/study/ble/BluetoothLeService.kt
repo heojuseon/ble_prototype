@@ -74,8 +74,8 @@ class BluetoothLeService: Service() {
     private val leScanCallback: ScanCallback = object : ScanCallback(){
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             super.onScanResult(callbackType, result)
-//            // 스캔이 중단된 상태라면 추가적인 스캔 결과는 무시
-//            if (!scanning) return
+            // 스캔이 중단된 상태라면 추가적인 스캔 결과는 무시
+            if (!scanning) return
             Log.d("BLE!@!@", "Scanning...")
             //스캔 결과값 받아올 콜백 메소드
             //어뎁터에 연결하여 디바이스 정보 뿌려주는 로직(우선 리스트에 담아서 로그로 확인작업)
@@ -89,22 +89,32 @@ class BluetoothLeService: Service() {
                         Manifest.permission.BLUETOOTH_CONNECT
                     ) == PackageManager.PERMISSION_GRANTED
                 ) {
-                    if (deviceName?.startsWith("GBS") == true) {
+                    if (!deviceName.isNullOrEmpty() && deviceName.startsWith("GBS")) {
                         scanning = false
                         bluetoothScanner?.stopScan(this)
                         handler.removeCallbacksAndMessages(null)
                         Log.d("BLE!@!@", "Scan stopped")
+
+                        val intent = Intent(BLE_SCAN_RESULT) //action 값
+                        intent.putExtra("device_name", deviceName)
+                        intent.putExtra("device_address", deviceAddress)
+                        intent.putExtra("result", result)
+                        sendBroadcast(intent)
                     }
+                } else return
+            } else {
+                if (!deviceName.isNullOrEmpty() && deviceName.startsWith("GBS")) {
+                    scanning = false
+                    bluetoothScanner?.stopScan(this)
+                    handler.removeCallbacksAndMessages(null)
+                    Log.d("BLE!@!@", "Scan stopped")
+
                     val intent = Intent(BLE_SCAN_RESULT) //action 값
                     intent.putExtra("device_name", deviceName)
                     intent.putExtra("device_address", deviceAddress)
+                    intent.putExtra("result", result)
                     sendBroadcast(intent)
-                } else return
-            } else {
-                val intent = Intent(BLE_SCAN_RESULT) //action 값
-                intent.putExtra("device_name", deviceName)
-                intent.putExtra("device_address", deviceAddress)
-                sendBroadcast(intent)
+                }
             }
         }
 
@@ -178,7 +188,6 @@ class BluetoothLeService: Service() {
             super.onCharacteristicRead(gatt, characteristic, value, status)
             Log.d("BLE!@!@", "onCharacteristicRead")
             if (status == BluetoothGatt.GATT_SUCCESS){  //읽기 성공시
-                broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic)   //읽은 데이터를 사용 가능하다고 알린다.
                 Log.d("BLE!@!@", "onCharacteristicRead_Success")
             } else {
                 Log.d("BLE!@!@", "onCharacteristicRead_Failed")
@@ -192,7 +201,6 @@ class BluetoothLeService: Service() {
             value: ByteArray
         ) {
             super.onCharacteristicChanged(gatt, characteristic, value)
-            broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic)
         }
 
         override fun onCharacteristicWrite(
@@ -202,31 +210,6 @@ class BluetoothLeService: Service() {
         ) {
             super.onCharacteristicWrite(gatt, characteristic, status)
             Log.d("BLE!@!@", "onCharacteristicWrite")
-        }
-    }
-
-    private fun broadcastUpdate(action: String, characteristic: BluetoothGattCharacteristic) {
-        val intent = Intent(action)
-
-        /**
-         * GATT를 사용하는 장치와 연결되었을 때 데이터 수신
-         * 만약 characteristic의 UUID가 RX_CHARACTERISTIC 같다면, 해당 특성의 값이 수신 데이터를 나타낸다는 것을 의미
-         */
-        when (characteristic.uuid) {
-            RX_CHARACTERISTIC -> {
-                val flag = characteristic.properties
-                val format = when (flag and 0x01) {
-                    0x01 -> {
-                        //0x01 이면 특성값이 : FORMAT_UINT16
-                        Log.d("BLE!@!@", "RX_CHARACTERISTIC format UINT16.")
-                        BluetoothGattCharacteristic.FORMAT_UINT16
-                    }
-                    else -> {
-                        Log.d("BLE!@!@", "RX_CHARACTERISTIC format UINT8.")
-                        BluetoothGattCharacteristic.FORMAT_UINT8
-                    }
-                }
-            }
         }
     }
 

@@ -1,11 +1,10 @@
 package com.study.ble
 
 import android.Manifest
-import android.annotation.SuppressLint
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGattCharacteristic
-import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothGattService
-import android.bluetooth.BluetoothStatusCodes
+import android.bluetooth.le.ScanResult
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -13,25 +12,18 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
-import android.icu.lang.UCharacter.GraphemeClusterBreak.L
 import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.util.Log
-import androidx.core.app.ActivityCompat
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.BaseAdapter
+import android.widget.TextView
 import androidx.core.content.ContextCompat
-import androidx.core.content.ContextCompat.registerReceiver
-import com.study.ble.DeviceControlActivity.Companion.EXTRAS_DEVICE_ADDRESS
-import com.study.ble.DeviceControlActivity.Companion.EXTRAS_DEVICE_NAME
 import com.study.ble.databinding.ActivityDeviceControlBinding
-import com.study.ble.utill.Constants
-import com.study.ble.utill.SafeAppGattAttribute
-import com.study.ble.utill.SafeAppGattAttribute.TX_CHARACTERISTIC
-import com.study.ble.utill.SafeAppGattAttribute.UART_SERVICE
-import java.util.UUID
 
 class DeviceControlActivity : AppCompatActivity() {
     private lateinit var binding: ActivityDeviceControlBinding
@@ -42,35 +34,43 @@ class DeviceControlActivity : AppCompatActivity() {
     private var writeCharacteristic: BluetoothGattCharacteristic? = null
     private var notifyCharacteristic: BluetoothGattCharacteristic? = null
 
-
-
-    companion object{
-        const val EXTRAS_DEVICE_NAME = "DEVICE_NAME"
-        const val EXTRAS_DEVICE_ADDRESS = "DEVICE_ADDRESS"
-    }
+    private val leDeviceListAdapter: LeDeviceListAdapter = LeDeviceListAdapter()
+    private var isReceiverRegistered = false
 
     //ble_scanReceiver
     private val bleScanReceiver = object : BroadcastReceiver(){
         override fun onReceive(context: Context?, intent: Intent?) {
             when(intent?.action) {
                 BluetoothLeService.BLE_SCAN_RESULT -> {
+                    //test용
                     val deviceName = intent.getStringExtra("device_name")
                     val deviceAddress = intent.getStringExtra("device_address")
-                    Log.d("BLE!@!@", "bleScanReceiver : $deviceName")
+                    Log.d("BLE!@!@", "bleScanReceiver_deviceName : $deviceName")
+                    Log.d("BLE!@!@", "bleScanReceiver_deviceAddress : $deviceAddress")
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        val result = intent.getParcelableExtra("result", ScanResult::class.java)
+                        leDeviceListAdapter.addDevice(result)
+                        leDeviceListAdapter.notifyDataSetChanged()
+                        Log.d("BLE!@!@", "bleScanReceiver_result : $result")
+                    } else {
+                        val result: ScanResult? = intent.getParcelableExtra("result")
+                        leDeviceListAdapter.addDevice(result)
+                        leDeviceListAdapter.notifyDataSetChanged()
+                        Log.d("BLE!@!@", "bleScanReceiver_result : $result")
+                    }
                 }
             }
         }
-
     }
 
 
     //서비스가 연결되어있을 경우 안되어있을경우
     private val serviceConnection: ServiceConnection = object: ServiceConnection {
-
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             bluetoothLeService = (service as BluetoothLeService.LocalBinder).getService()
-//            bluetoothLeService?.connect(deviceAddress)  //BLE 기기에 연결
             bluetoothLeService?.let { bluetooth ->
+                //연결을 확인하고 장치에 연결하기 위해 서비스에서 기능을 호출
                 if (!bluetooth.initialize()) {
                     Log.e("BLE!@!@", "Unable to initialize Bluetooth")
                     finish()
@@ -126,49 +126,21 @@ class DeviceControlActivity : AppCompatActivity() {
     private fun displayGattServices(gattServices: List<BluetoothGattService?>?) {
         if (gattServices == null) return
         var uuid: String?
-        val gattServiceData: MutableList<HashMap<String, String>> = mutableListOf()
-        val gattCharacteristicData: MutableList<ArrayList<HashMap<String, String>>> = mutableListOf()
-        val mGattCharacteristics: MutableList<BluetoothGattCharacteristic> = mutableListOf()
 
         //사용 가능한 GATT 서비스를 반복
         gattServices.forEach { gattService ->
-            val currenServiceData = HashMap<String, String>()
             uuid = gattService?.uuid.toString()
-            Log.d("BLE!@!@", "gatt_service_uuid: $uuid")
-            currenServiceData["name"] = SafeAppGattAttribute.lookup(uuid, "unknownService")
-            currenServiceData["uuid"] = uuid!!
-            Log.d("BLE!@!@", "gatt_service_uuid_currenServiceData: $uuid")
-            gattServiceData += currenServiceData
-
-            val gattCharacteristicGroupData: ArrayList<HashMap<String, String>> = arrayListOf()
             val gattCharacteristics = gattService?.characteristics
-            val charas: MutableList<BluetoothGattCharacteristic> = mutableListOf()
 
             //사용 가능한 특성을 반복
             gattCharacteristics?.forEach { gattCharacteristic ->
-                charas += gattCharacteristic
-                val currentCharaData: HashMap<String, String> = hashMapOf()
                 uuid = gattCharacteristic.uuid.toString()
-
                 //tx 특성만 뽑을경우
                 if (uuid.equals("6E400002-B5A3-F393-E0A9-E50E24DCCA9E".lowercase())) {
                     writeCharacteristic = gattCharacteristic
                 }
-
-                Log.d("BLE!@!@", "gatt_charas_uuid: $uuid")
-                currentCharaData["name"] = SafeAppGattAttribute.lookup(uuid, "unknowncharas")
-                currentCharaData["uuid"] = uuid!!
-                gattCharacteristicGroupData += currentCharaData
-                Log.d("BLE!@!@", "gatt_charas_uuid_currentCharaData: $uuid")
             }
-            mGattCharacteristics += charas
-            Log.d("BLE!@!@", "mGattCharacteristics: $mGattCharacteristics")
-            gattCharacteristicData += gattCharacteristicGroupData
-            Log.d("BLE!@!@", "gattCharacteristicData: $gattCharacteristicData")
         }
-//        //tx 특성만 뽑을경우
-//        Log.d("BLE!@!@", "txCharacteristic : ${txCharacteristic?.uuid}")
-
         sayHello()
     }
 
@@ -189,19 +161,35 @@ class DeviceControlActivity : AppCompatActivity() {
 
         scanControl()
 
+        binding.scanList.adapter = leDeviceListAdapter
 
-        val deviceName = intent.getStringExtra(EXTRAS_DEVICE_NAME)
-        deviceAddress = intent.getStringExtra(EXTRAS_DEVICE_ADDRESS)
-        Log.d("BLE!@!@", "getDeviceName: $deviceName")
-        Log.d("BLE!@!@", "getDeviceAddress: $deviceAddress")
+        listClickListener()
 
-        //연결 및 연결 해제 이벤트를 수신하기 위한 서비스 시작
+        //Gatt연결 및 연결 해제 이벤트를 수신하기 위한 서비스 시작
         val gattServiceIntent = Intent(this, BluetoothLeService::class.java)
         bindService(gattServiceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
     }
 
+    private fun listClickListener() {
+        binding.scanList.setOnItemClickListener { parent, view, position, id ->
+            Log.d("BLE!@!@", "Clicked -> position: $position, id: $id")
+
+            val device = leDeviceListAdapter.getDevice(position) as BluetoothDevice
+            deviceAddress = device.address
+            bluetoothLeService?.connect(deviceAddress)
+        }
+    }
+
     private fun scanControl() {
         binding.startScan.setOnClickListener {
+            //기기가 꺼져있을경우 다시 start_scan 시 어뎁터 갱신
+            leDeviceListAdapter.clearDevices()
+            leDeviceListAdapter.notifyDataSetChanged()
+            //스캔 시작 전에 스캔 브로드캐스트가 이미 등록되어있는지 확인
+            if (!isReceiverRegistered) {
+                registerReceiver(bleScanReceiver, bleScanIntentFilter())
+                isReceiverRegistered = true
+            }
             //스캔 시작
             bluetoothLeService?.startScan()
         }
@@ -226,6 +214,11 @@ class DeviceControlActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         unregisterReceiver(gattUpdateReceiver)
+
+        if (isReceiverRegistered) {
+            unregisterReceiver(bleScanReceiver)
+            isReceiverRegistered = false
+        }
     }
 
     private fun makeGattUpdateIntentFilter(): IntentFilter {
@@ -235,5 +228,89 @@ class DeviceControlActivity : AppCompatActivity() {
             addAction(BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED)
             addAction(BluetoothLeService.ACTION_DATA_AVAILABLE)
         }
+    }
+
+
+    private inner class LeDeviceListAdapter: BaseAdapter() {
+        private val arrayDevices: ArrayList<BluetoothDevice> = ArrayList<BluetoothDevice>()
+        override fun getCount(): Int {
+            return arrayDevices.size
+        }
+
+        override fun getItem(position: Int): Any {
+            return arrayDevices[position]
+        }
+
+        override fun getItemId(position: Int): Long {
+            return position.toLong()
+        }
+
+        fun getDevice(position: Int): Any {
+            return arrayDevices[position]
+        }
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
+            val view: View
+            val viewHolder: ViewHolder
+
+            if (convertView == null){
+                view = LayoutInflater.from(parent?.context).inflate(R.layout.list_item, parent, false)
+                //ViewHolder 생성 및 초기화
+                viewHolder = ViewHolder()
+                viewHolder.deviceName = view.findViewById(R.id.device_name)
+                viewHolder.deviceAddress = view.findViewById(R.id.device_address)
+
+                // View에 ViewHolder를 설정
+                view.tag = viewHolder
+            } else {    //기존 뷰 재사용
+                view = convertView
+                viewHolder = view.tag as ViewHolder
+            }
+            // 현재 position에 해당하는 BluetoothDevice 가져오기
+            val device: BluetoothDevice = arrayDevices[position]
+
+            //디바이스 정보가져올때 android version 12++ BLUETOOTH_CONNECT 권한 필요
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {    //version 12++(BLUETOOTH_SCAN은 version 12이상 타겟팅)
+                if (ContextCompat.checkSelfPermission(
+                        applicationContext,
+                        Manifest.permission.BLUETOOTH_CONNECT
+                    ) == PackageManager.PERMISSION_GRANTED
+                ) {
+                    // 디바이스 이름이 없으면 'Unknown Device'로 설정
+                    val deviceName = device.name
+                    val deviceAddress = device.address
+                    // ViewHolder에 데이터를 설정
+                    viewHolder.deviceName?.text = deviceName
+                    viewHolder.deviceAddress?.text = deviceAddress
+
+                } else {
+                    Log.d("BLE!@!@", "BLUETOOTH_BLUETOOTH_CONNECT_V12 권한이 없습니다.")
+                }
+            } else {
+                val deviceName = device.name
+                val deviceAddress = device.address
+                // ViewHolder에 데이터를 설정
+                viewHolder.deviceName?.text = deviceName
+                viewHolder.deviceAddress?.text = deviceAddress
+            }
+            return view
+        }
+
+        fun addDevice(result: ScanResult?) {
+            result?.let {
+                if (!arrayDevices.contains(it.device)){
+                    arrayDevices.add(it.device)
+                }
+            }
+        }
+
+        fun clearDevices() {
+            arrayDevices.clear()
+        }
+
+    }
+    private class ViewHolder {
+        var deviceName: TextView? = null
+        var deviceAddress: TextView? =null
     }
 }
