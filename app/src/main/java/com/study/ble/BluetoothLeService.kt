@@ -45,7 +45,7 @@ class BluetoothLeService: Service() {
     private val handler = Handler(Looper.getMainLooper())
     // Stops scanning after 10 seconds.
     private val SCAN_PERIOD: Long = 10000
-
+    private var writeCharacteristic: BluetoothGattCharacteristic? = null
     fun initialize(): Boolean {
         val bluetoothManager: BluetoothManager = getSystemService(BluetoothManager::class.java)
         bluetoothAdapter = bluetoothManager.adapter
@@ -171,6 +171,8 @@ class BluetoothLeService: Service() {
         override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
             super.onServicesDiscovered(gatt, status)
             if (status == BluetoothGatt.GATT_SUCCESS) {
+                //ble 특성 읽기
+                displayGattServices(getSupportedGattServices())
                 broadcastUpdate(ACTION_GATT_SERVICES_DISCOVERED)
                 Log.d("BLE!@!@", "onServicesDiscovered_GATT_SUCCESS")
             } else {
@@ -214,6 +216,32 @@ class BluetoothLeService: Service() {
     }
 
     /**
+     * BLE 특성읽기
+     * BluetoothGattService의 리스트를 받아와서 그 서비스와 해당하는 특성 들을 화면에 표시하기 위한 작업 수행
+     * 지원되는 GATT를 반복하는 방법을 보여줍니다.
+     */
+    private fun displayGattServices(gattServices: List<BluetoothGattService?>?) {
+        if (gattServices == null) return
+        var uuid: String?
+
+        Log.d("BLE!@!@", "displayGattServices")
+        //사용 가능한 GATT 서비스를 반복
+        gattServices.forEach { gattService ->
+            uuid = gattService?.uuid.toString()
+            val gattCharacteristics = gattService?.characteristics
+
+            //사용 가능한 특성을 반복
+            gattCharacteristics?.forEach { gattCharacteristic ->
+                uuid = gattCharacteristic.uuid.toString()
+                //tx 특성만 뽑을경우
+                if (uuid.equals("6E400002-B5A3-F393-E0A9-E50E24DCCA9E".lowercase())) {
+                    writeCharacteristic = gattCharacteristic
+                }
+            }
+        }
+    }
+
+    /**
      * 서버가 GATT 서버에 연결하거나 연결을 끊을 때 새로운 상태의 활동 전달
      */
     private fun broadcastUpdate(action: String) {
@@ -230,7 +258,14 @@ class BluetoothLeService: Service() {
 
     private val binder = LocalBinder()
     override fun onBind(intent: Intent?): IBinder {
+        Log.d("BLE!@!@", "onBind")
         return binder
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // 서비스가 종료되지 않도록 START_STICKY 사용
+        Log.d("BLE!@!@", "onStartCommand")
+        return START_STICKY
     }
 
     //블루투스 디바이스 GATT 서버 연결
@@ -386,6 +421,14 @@ class BluetoothLeService: Service() {
                 scanning = false
                 bluetoothScanner?.stopScan(leScanCallback)
                 Log.d("BLE!@!@", "Scan stopped")
+            }
+        }
+    }
+
+    fun sayHello() {
+        writeCharacteristic?.let {
+            if (it.properties or BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE > 0) {
+                writeCharacteristic(it)
             }
         }
     }

@@ -2,8 +2,6 @@ package com.study.ble
 
 import android.Manifest
 import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothGattCharacteristic
-import android.bluetooth.BluetoothGattService
 import android.bluetooth.le.ScanResult
 import android.content.BroadcastReceiver
 import android.content.ComponentName
@@ -31,8 +29,8 @@ class DeviceControlActivity : AppCompatActivity() {
 
     private var deviceAddress: String? = ""
 
-    private var writeCharacteristic: BluetoothGattCharacteristic? = null
-    private var notifyCharacteristic: BluetoothGattCharacteristic? = null
+//    private var writeCharacteristic: BluetoothGattCharacteristic? = null
+//    private var notifyCharacteristic: BluetoothGattCharacteristic? = null
 
     private val leDeviceListAdapter: LeDeviceListAdapter = LeDeviceListAdapter()
     private var isReceiverRegistered = false
@@ -65,7 +63,7 @@ class DeviceControlActivity : AppCompatActivity() {
     }
 
 
-    //서비스가 연결되어있을 경우 안되어있을경우
+    //bind서비스가 연결되어있을 경우 안되어있을경우
     private val serviceConnection: ServiceConnection = object: ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             bluetoothLeService = (service as BluetoothLeService.LocalBinder).getService()
@@ -76,7 +74,9 @@ class DeviceControlActivity : AppCompatActivity() {
                     finish()
                 }
                 else {
-                    bluetooth.connect(deviceAddress)
+//                    bluetooth.connect(deviceAddress)
+                    Log.d("BLE!@!@", "onServiceConnected")
+                    bluetooth.startScan()
                 }
             }
         }
@@ -109,45 +109,10 @@ class DeviceControlActivity : AppCompatActivity() {
                 BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED -> { //gatt service 발견
                     // Show all the supported services and characteristics on the user interface.
                     // BLE 제공되는 서비스(and 특성)들 가져오는 함수
-                    displayGattServices(bluetoothLeService?.getSupportedGattServices())
+//                    displayGattServices(bluetoothLeService?.getSupportedGattServices())
+                    bluetoothLeService?.sayHello()
                     Log.d("BLE!@!@", "BLE : GATT_SERVICES_DISCOVERED")
                 }
-            }
-        }
-    }
-
-    /**
-     * BLE 특성읽기
-     * BluetoothGattService의 리스트를 받아와서 그 서비스와 해당하는 특성 들을 화면에 표시하기 위한 작업 수행
-     * 지원되는 GATT를 반복하는 방법을 보여줍니다.
-     */
-//    //tx 특성만 뽑을경우
-//    private var txCharacteristic: BluetoothGattCharacteristic? = null
-    private fun displayGattServices(gattServices: List<BluetoothGattService?>?) {
-        if (gattServices == null) return
-        var uuid: String?
-
-        //사용 가능한 GATT 서비스를 반복
-        gattServices.forEach { gattService ->
-            uuid = gattService?.uuid.toString()
-            val gattCharacteristics = gattService?.characteristics
-
-            //사용 가능한 특성을 반복
-            gattCharacteristics?.forEach { gattCharacteristic ->
-                uuid = gattCharacteristic.uuid.toString()
-                //tx 특성만 뽑을경우
-                if (uuid.equals("6E400002-B5A3-F393-E0A9-E50E24DCCA9E".lowercase())) {
-                    writeCharacteristic = gattCharacteristic
-                }
-            }
-        }
-        sayHello()
-    }
-
-    private fun sayHello() {
-        writeCharacteristic?.let {
-            if (it.properties or BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE > 0) {
-                bluetoothLeService?.writeCharacteristic(it)
             }
         }
     }
@@ -165,9 +130,9 @@ class DeviceControlActivity : AppCompatActivity() {
 
         listClickListener()
 
-        //Gatt연결 및 연결 해제 이벤트를 수신하기 위한 서비스 시작
-        val gattServiceIntent = Intent(this, BluetoothLeService::class.java)
-        bindService(gattServiceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
+        //Gatt연결 및 연결 해제 이벤트를 수신하기 위한 bind서비스 시작
+//        val gattServiceIntent = Intent(this, BluetoothLeService::class.java)
+//        bindService(gattServiceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
     }
 
     private fun listClickListener() {
@@ -182,16 +147,31 @@ class DeviceControlActivity : AppCompatActivity() {
 
     private fun scanControl() {
         binding.startScan.setOnClickListener {
-            //기기가 꺼져있을경우 다시 start_scan 시 어뎁터 갱신
+            // 어댑터에서 기기 목록을 초기화하고 UI 갱신
             leDeviceListAdapter.clearDevices()
             leDeviceListAdapter.notifyDataSetChanged()
-            //스캔 시작 전에 스캔 브로드캐스트가 이미 등록되어있는지 확인
+
+            // BLE 서비스를 시작 (startService 호출)
+            val intent = Intent(this, BluetoothLeService::class.java)
+            startService(intent)  // 서비스 시작
+            // 서비스와 바인딩하여 상호작용할 수 있도록 설정
+            bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+
+            // 스캔 브로드캐스트 리시버가 한 번만 등록되도록 설정
             if (!isReceiverRegistered) {
                 registerReceiver(bleScanReceiver, bleScanIntentFilter())
                 isReceiverRegistered = true
             }
-            //스캔 시작
-            bluetoothLeService?.startScan()
+//            //기기가 꺼져있을경우 다시 start_scan 시 어뎁터 갱신
+//            leDeviceListAdapter.clearDevices()
+//            leDeviceListAdapter.notifyDataSetChanged()
+//            //스캔 시작 전에 스캔 브로드캐스트가 이미 등록되어있는지 확인
+//            if (!isReceiverRegistered) {
+//                registerReceiver(bleScanReceiver, bleScanIntentFilter())
+//                isReceiverRegistered = true
+//            }
+//            //스캔 시작
+//            bluetoothLeService?.startScan()
         }
     }
 
